@@ -2,6 +2,8 @@ from flask import request, jsonify
 from db import mongo
 from models import project_schema
 from bson.objectid import ObjectId
+import re
+
 
 # Get all projects
 def get_projects_controller():
@@ -53,35 +55,62 @@ def create_project_controller():
         if not project[field]:
             return jsonify({"error": f"{field} is required"}), 400
 
-    # Insert into MongoDB
     result = mongo.db.projects.insert_one(project)
 
     return jsonify({"message": "Project created successfully", "projectId": str(result.inserted_id)}), 201
 
 # Search/filter projects 
 def search_projects_controller():
-    search_term = request.args.get("q", "")
-    if not search_term:
-        return jsonify({"results": []})
+    try:
+        query = request.args.get("query", '')
+        if not query:
+            return jsonify([]), 200
 
-    regex = {"$regex": search_term, "$options": "i"}
+        regex = {"$regex": query, "$options": "i"}  
 
-    query = {
-        "$or": [
-            {"Project Name": regex},
-            {"Country": regex},
-            {"Sector": regex},
-            {"Registry": regex},
-            {"Developer": regex}
-        ]
-    }
+        # Try to convert input to int or float if possible
+        numeric_query = None
+        try:
+            if "." in query:
+                numeric_query = float(query)
+            else:
+                numeric_query = int(query)
+        except:
+            numeric_query = None  # Not a number
 
-    results = list(mongo.db.projects.find(query))
+        # Build filter
+        search_filter = {
+            "$or": [
+                {"Project Name": regex},
+                {"Developer": regex},
+                {"Registry": regex},
+                {"Methodology": regex},
+                {"Sector": regex},
+                {"Country": regex},
+                {"Project Status": regex},
+                {"Crediting Period Start": regex},
+                {"Crediting Period End": regex},
+            ]
+        }
 
-    for r in results:
-        r["_id"] = str(r["_id"])
+        # Add numeric fields if input is a number
+        if numeric_query is not None:
+            search_filter["$or"].extend([
+                {"Id": numeric_query},
+                {"Annual Est. Units": numeric_query},
+                {"Total Issued Units": numeric_query},
+                {"Total Retired Units": numeric_query},
+                {"Total Available Units": numeric_query},
+                {"Price": numeric_query},
+            ])
 
-    return jsonify({"results": results})
+        projects = list(mongo.db.projects.find(search_filter))
+        for project in projects:
+            project["_id"] = str(project["_id"])
+        return jsonify(projects), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 # Delete Project
 def delete_project_controller(project_id):

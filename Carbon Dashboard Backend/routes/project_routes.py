@@ -31,7 +31,7 @@ def search_projects():
 def delete_project(project_id):
     return delete_project_controller(project_id)
 
-@projects_bp.route('/api/projects/<project_id>', methods=['PUT'])
+@projects_bp.route('/<project_id>', methods=['PUT'])
 def update_project(project_id):
     return update_project_controller(project_id)
 
